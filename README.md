@@ -1,6 +1,10 @@
 # Pixiv
-Python3; Get image from pixiv.    
+Python3;     
+Get image from pixiv.    
 
+# Update
+1. Fix some error.
+2. Add User ID in file name.
 
 # Default
 ```
