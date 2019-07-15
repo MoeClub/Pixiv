@@ -22,6 +22,7 @@ class pixiv:
             "Connection": "keep-alive",
         }
         self.data_low = []
+        self.num = 0
 
     def _http(self, url, headers, Obj=False):
         res = request.urlopen(request.Request(url, headers=headers, method='GET'))
@@ -34,16 +35,25 @@ class pixiv:
         _header = self.DefaultHeader.copy()
         _header["Referer"] = "https://www.pixiv.net/member_illust.php?mode=medium&illust_id={}".format(url_id)
         _url_data = "https://www.pixiv.net/touch/ajax/illust/details?illust_id={}".format(url_id)
-        data_url = str(str(str(re.findall('"url_big":"[^"]*"', self._http(_url_data, _header))[0]).replace('\\', '')).split(':', 1)[-1]).strip('"')
-        return data_url, _header
+        _data_details = self._http(_url_data, _header)
+        data_url = self.sort_data(re.findall('"url_big":"[^"]*"', _data_details))
+        data_uid = str(str(str(re.findall('"user_id":"[^"]*"', _data_details)[0]).split(':', 1)[-1]).strip('"'))
+        return data_url, _header, data_uid
+
+    def sort_data(self, data):
+        _data = []
+        for item in data:
+            if item not in _data:
+                _data.append(item)
+        return [str(str(item).replace('\\', '').split(':', 1)[-1]).strip('"') for item in _data]
 
     def get_item(self, UserID=None):
         if not UserID:
             UserID = 'https://www.pixiv.net/ranking.php?mode=male'
         if '://' in str(UserID):
-            Mode_ID = 0
+            Mode_ID = False
         else:
-            Mode_ID = 1
+            Mode_ID = True
         if Mode_ID:
             _url = "https://www.pixiv.net/ajax/user/{}/profile/all".format(str(UserID))
             page = self._http(_url, self.DefaultHeader, True)
@@ -64,33 +74,36 @@ class pixiv:
         if not os.path.exists(folder):
             return None
         _split = "_"
-        _exist = [str(str(item).split(_split)[0]) for item in os.listdir(folder) if _split in item]
+        _exist = {}.fromkeys([str(str(item).split(_split)[1]) for item in os.listdir(folder) if _split in item]).keys()
         print("Exist Item:", len(_exist))
         for _item in self.data_low.copy():
             if _item in _exist:
                 self.data_low.remove(_item)
+
+    def get_data_by_item(self, item):
+        data = self.data_image(item)
+        for data_url in data[0]:
+            image = self._http(data_url, data[1], True)
+            if image.code != 200:
+                raise Exception("Pixiv Image: [{} | {}]".format(image.code, data[0]))
+            self.write(str("{}_{}").format(str(data[2]), str(str(data_url).rsplit('/', 1)[-1])), image.read())
 
     def get_data(self, data_list=None):
         if not data_list:
             data_list = self.data_low
         for item in data_list:
             self.get_data_by_item(item)
+        print("\nTotal Image: ", self.num)
 
-    def get_data_by_item(self, item):
-        data = self.data_image(item)
-        image = self._http(data[0], data[1], True)
-        if image.code != 200:
-            raise Exception("Pixiv Image: [{} | {}]".format(image.code, data[0]))
-        self.write(data[0], image.read())
-
-    def write(self, url, data):
+    def write(self, name, data):
         folder = os.path.join(self.root, self.folder)
         if not os.path.exists(folder):
             os.mkdir(folder)
-        file = os.path.join(folder, str(str(url).rsplit('/', 1)[-1]).strip())
+        file = os.path.join(folder, str(name))
         fp = open(file, 'wb')
         fp.write(data)
         fp.close()
+        self.num += 1
         print("Pixiv Image: [ OK | {} ]".format(file))
 
     def add_queue(self, _queue, data_list=None):
@@ -116,12 +129,13 @@ class pixiv:
                         _threads.remove(_item)
                 continue
             item = _queue.get()
-            task = threading.Thread(target=self.get_data_by_item, args=(item, ))
+            task = threading.Thread(target=self.get_data_by_item, args=(item,))
             task.setDaemon(True)
             task.start()
             _threads.append(task)
         for _task in _threads:
             _task.join()
+        print("\nTotal Image: ", self.num)
 
 
 if __name__ == '__main__':
@@ -131,11 +145,4 @@ if __name__ == '__main__':
         task = None
     p = pixiv()
     p.get_item(task)
-    p.multi_data()
-
-
-
-
-
-
-
+    p.multi_data(max=25)
