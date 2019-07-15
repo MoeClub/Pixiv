@@ -3,6 +3,7 @@ Python3;
 Get image from pixiv.    
 
 # Update
+[2019/07/15 16:15:00]
 1. Fix some error.
 2. Add User ID in file name.
 
